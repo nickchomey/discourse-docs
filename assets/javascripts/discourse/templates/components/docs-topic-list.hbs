@@ -1,4 +1,4 @@
-{{#load-more selector=".topic-list tr" action=loadMore}}
+<LoadMore @selector=".topic-list tr" @action={{loadMore}}>
   <table class="topic-list">
     <thead class="topic-list-header">
       <th role="button" class="topic-list-data" {{action "sortListTitle"}}>
@@ -28,10 +28,14 @@
 
     <tbody class="topic-list-body">
       {{#each topics as |topic|}}
-        {{raw "docs-topic-list-item" topic=topic}}
+        {{docs-topic-list-item
+          topic=topic
+          urlPath=urlPath
+          showExcerpt=showExcerpts
+        }}
       {{/each}}
     </tbody>
   </table>
-{{/load-more}}
+</LoadMore>
 
-{{conditional-loading-spinner condition=loading}}
+<ConditionalLoadingSpinner @condition={{loading}} />

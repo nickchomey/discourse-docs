@@ -2,7 +2,7 @@
 
 module Docs
   class DocsController < ApplicationController
-    requires_plugin 'docs'
+    requires_plugin PLUGIN_NAME
 
     skip_before_action :check_xhr, only: [:index]
 
@@ -15,20 +15,23 @@ module Docs
         search_term: params[:search],
         ascending: params[:ascending],
         order: params[:order],
-        page: params[:page]
+        page: params[:page],
       }
 
-      query = Docs::Query.new(current_user, filters).list
+      query = Docs::Query.new(guardian, filters).list
 
       if filters[:topic].present?
         begin
           @topic = Topic.find(filters[:topic])
-        rescue
+        rescue StandardError
           raise Discourse::NotFound
         end
 
-        @excerpt = @topic.posts[0].excerpt(500, { strip_links: true, text_entities: true }) if @topic.posts[0].present?
-        @excerpt = (@excerpt || "").gsub(/\n/, ' ').strip
+        @excerpt =
+          @topic.posts[0].excerpt(500, { strip_links: true, text_entities: true }) if @topic.posts[
+          0
+        ].present?
+        @excerpt = (@excerpt || "").gsub(/\n/, " ").strip
 
         query["topic"] = get_topic(@topic, current_user)
       end
@@ -39,14 +42,12 @@ module Docs
           render :get_topic
         end
 
-        format.json do
-          render json: query
-        end
+        format.json { render json: query }
       end
     end
 
     def get_topic(topic, current_user)
-      return nil unless topic_in_docs(topic.category_id, topic.tags)
+      return nil unless Docs.topic_in_docs(topic.category_id, topic.tags)
 
       topic_view = TopicView.new(topic.id, current_user)
       guardian = Guardian.new(current_user)
@@ -65,20 +66,12 @@ module Docs
     end
 
     def set_title
-      title = "#{I18n.t('js.docs.title')} - #{SiteSetting.title}"
+      title = "#{I18n.t("js.docs.title")} - #{SiteSetting.title}"
       if @topic
-        topic_title = @topic['unicode_title'] || @topic['title']
+        topic_title = @topic["unicode_title"] || @topic["title"]
         title = "#{topic_title} - #{title}"
       end
       title
-    end
-
-    def topic_in_docs(category, tags)
-      category_match = Docs::Query.categories.include?(category.to_s)
-      tags = tags.pluck(:name)
-      tag_match = Docs::Query.tags.any? { |tag| tags.include?(tag) }
-
-      category_match || tag_match
     end
   end
 end

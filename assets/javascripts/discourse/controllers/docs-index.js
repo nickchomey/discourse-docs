@@ -6,6 +6,7 @@ import Docs from "discourse/plugins/discourse-docs/discourse/models/docs";
 import { getOwner } from "@ember/application";
 import getURL from "discourse-common/lib/get-url";
 import I18n from "I18n";
+import { htmlSafe } from "@ember/template";
 
 const SHOW_FILTER_AT = 10;
 
@@ -47,6 +48,8 @@ export default Controller.extend({
   categories: readOnly("model.categories"),
   topics: alias("model.topics.topic_list.topics"),
   tags: readOnly("model.tags"),
+  showExcerpts: readOnly("model.meta.show_topic_excerpts"),
+  tagGroups: readOnly("model.tag_groups"),
   topicCount: alias("model.topic_count"),
   emptyResults: equal("topicCount", 0),
 
@@ -68,6 +71,7 @@ export default Controller.extend({
       ascending: true,
     });
   },
+
   @discourseComputed("categories", "categorySort", "categoryFilter")
   sortedCategories(categories, categorySort, filter) {
     let { type, direction } = categorySort;
@@ -143,6 +147,39 @@ export default Controller.extend({
     return tags;
   },
 
+  @discourseComputed("tagGroups", "tagSort", "tagFilter")
+  sortedTagGroups(tagGroups, tagSort, filter) {
+    let { type, direction } = tagSort;
+    let sortedTagGroups = [...tagGroups];
+
+    if (type === "numeric") {
+      sortedTagGroups.forEach((group) => {
+        group.totalCount = group.tags.reduce(
+          (acc, curr) => acc + curr.count,
+          0
+        );
+      });
+
+      sortedTagGroups.sort((a, b) => b.totalCount - a.totalCount);
+    } else {
+      sortedTagGroups.sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      );
+    }
+
+    if (direction === "desc") {
+      sortedTagGroups.reverse();
+    }
+
+    if (this.showTagFilter) {
+      return sortedTagGroups.filter((tag) =>
+        tag.id.toLowerCase().includes(filter.toLowerCase())
+      );
+    }
+
+    return sortedTagGroups;
+  },
+
   @discourseComputed("tagSort")
   tagSortNumericIcon(tagSort) {
     if (tagSort.type === "numeric" && tagSort.direction === "asc") {
@@ -193,9 +230,17 @@ export default Controller.extend({
     return !!filterTags;
   },
 
-  @discourseComputed()
-  shouldShowTags() {
-    return this.siteSettings.tagging_enabled;
+  @discourseComputed("siteSettings.tagging_enabled", "shouldShowTagsByGroup")
+  shouldShowTags(tagging_enabled, shouldShowTagsByGroup) {
+    return tagging_enabled && !shouldShowTagsByGroup;
+  },
+
+  @discourseComputed(
+    "siteSettings.show_tags_by_group",
+    "siteSettings.docs_tag_groups"
+  )
+  shouldShowTagsByGroup(show_tags_by_group, docs_tag_groups) {
+    return show_tags_by_group && Boolean(docs_tag_groups);
   },
 
   @discourseComputed()
@@ -215,7 +260,7 @@ export default Controller.extend({
 
     return {
       title: I18n.t("docs.no_docs.title"),
-      body: body.htmlSafe(),
+      body: htmlSafe(body),
     };
   },
 
@@ -230,10 +275,10 @@ export default Controller.extend({
       return [];
     }
 
-    return this.siteSettings.docs_categories.split("|").map((c) => {
-      const id = parseInt(c, 10);
-      return this.site.categories.findBy("id", id).name;
-    });
+    return this.siteSettings.docs_categories
+      .split("|")
+      .map((c) => this.site.categories.findBy("id", parseInt(c, 10))?.name)
+      .filter(Boolean);
   },
 
   @discourseComputed()
@@ -266,13 +311,6 @@ export default Controller.extend({
   },
 
   @action
-  setSelectedTopic(topicId) {
-    this.set("selectedTopic", topicId);
-
-    window.scrollTo(0, 0);
-  },
-
-  @action
   onChangeFilterSolved(solvedFilter) {
     this.set("filterSolved", solvedFilter);
   },
@@ -281,7 +319,10 @@ export default Controller.extend({
   updateSelectedTags(tag) {
     let filter = this.filterTags;
     if (filter && filter.includes(tag.id)) {
-      filter = filter.replace(tag.id, "").replace(/^\|+|\|+$/g, "");
+      filter = filter
+        .split("|")
+        .filter((f) => f !== tag.id)
+        .join("|");
     } else if (filter) {
       filter = `${filter}|${tag.id}`;
     } else {
@@ -296,17 +337,10 @@ export default Controller.extend({
 
   @action
   updateSelectedCategories(category) {
-    let filter = this.filterCategories;
-    if (filter && filter.includes(category.id)) {
-      filter = filter.replace(category.id, "").replace(/^\|+|\|+$/g, "");
-    } else if (filter) {
-      filter = `${filter}|${category.id}`;
-    } else {
-      filter = category.id;
-    }
-
+    const filterCategories =
+      category.id === parseInt(this.filterCategories, 10) ? null : category.id;
     this.setProperties({
-      filterCategories: filter,
+      filterCategories,
       selectedTopic: null,
     });
 

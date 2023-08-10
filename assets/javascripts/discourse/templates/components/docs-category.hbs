@@ -1,11 +1,9 @@
-<a href {{action this.selectCategory}} class="docs-item docs-category {{if category.active "selected"}}">
-  {{#unless category.active}}
-    {{d-icon "plus"}}
-  {{/unless}}
-
-  {{#if category.active}}
-    {{d-icon "times-circle"}}
-  {{/if}}
+<a
+  href
+  {{action this.selectCategory}}
+  class="docs-item docs-category {{if category.active 'selected'}}"
+>
+  {{d-icon (if category.active "times-circle" "far-circle")}}
 
   <span class="docs-item-id category-id">{{categoryName}}</span>
   <span class="docs-item-count category-count">{{category.count}}</span>
